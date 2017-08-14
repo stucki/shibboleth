@@ -102,9 +102,22 @@ class UserHandler
     }
 
 	function lookUpShibbolethUserInDatabase() {
+		$result = $this->checkForUserInDb('typo3Field','shibID');
+		if ($result === false) {
+			$result = $this->checkForUserInDb('typo3FieldFallback','shibIDFallback','typo3Field');
+		}
+		return $result;
+	}
 
-		$idField = $this->config['IDMapping.']['typo3Field'];
-		$idValue = $this->getSingle($this->config['IDMapping.']['shibID'],$this->config['IDMapping.']['shibID.']);
+	function checkForUserInDb($mappingDbFieldName, $mappingShibIdName, $mappingEmptyDbFieldName = null) {
+
+		// Skip this check if field is not configured
+		if (empty($this->config['IDMapping.'][$mappingDbFieldName])) {
+			return false;
+		}
+
+		$idField = $this->config['IDMapping.'][$mappingDbFieldName];
+		$idValue = $this->getSingle($this->config['IDMapping.'][$mappingShibIdName],$this->config['IDMapping.'][$mappingShibIdName.'.']);
 
         if ($idValue == '') {
             if ($this->writeDevLog)
@@ -123,7 +136,7 @@ class UserHandler
         $storagePid = 999999;
         if ($this->loginType == 'FE') {
             $storagePid = $this->shibboleth_extConf['FE_autoImport_pid'];
-        };
+        }
         if ($this->loginType == 'BE') {
             $storagePid = 0;
         }
@@ -142,14 +155,30 @@ class UserHandler
                 ->andWhere(
                     $query->expr()->eq('pid', $query->createNamedParameter($storagePid))
                 );
+
+            // Applies only if field is empty in the database
+            if (!empty($mappingEmptyDbFieldName)) {
+                $query->expr()->orWhere(
+                    $query->expr()->isNull($mappingEmptyDbFieldName),
+                    $query->expr()->eq($mappingEmptyDbFieldName, '')
+                );
+            }
+
             $statement = $query->execute();
             $row = $statement->fetch();
         } else {
             $where = $idField . '=\'' . $idValue . '\' ';
+
             // Next line: Don't use "enable_clause", as it will also exclude hidden users, i.e.
             // will create new users on every login attempt until user is unhidden by admin.
             $where .= ' AND deleted = 0 ';
             $where .= ' AND pid = '.(int) $storagePid;
+
+            // Applies only if field is empty in the database
+            if (!empty($mappingEmptyDbFieldName)) {
+                $where .= ' AND ('.$mappingEmptyDbFieldName.' IS NULL OR '.$mappingEmptyDbFieldName.'=\'\') ';
+            }
+
             //$GLOBALS['TYPO3_DB']->debugOutput = TRUE;
             $table = $this->db_user['table'];
             $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery (
@@ -162,10 +191,11 @@ class UserHandler
         }
 
         if ($row)  {
-			if ($this->writeDevLog) GeneralUtility::devlog('getUserFromDB returning user record ($row)','\TrustCnct\Shibboleth\User\UserHandler',0,$row);
+			if ($this->writeDevLog) GeneralUtility::devlog('getUserFromDB ('.$mappingDbFieldName.';'.$mappingShibIdName.') returning user record ($row)','\TrustCnct\Shibboleth\User\UserHandler',0,$row);
 			return $row;
 		}
-        if ($this->writeDevLog) GeneralUtility::devlog('getUserFromDB returning FALSE (no record found)','\TrustCnct\Shibboleth\User\UserHandler',0,$row);
+        if ($this->writeDevLog) GeneralUtility::devlog('getUserFromDB ('.$mappingDbFieldName.';'.$mappingShibIdName.') returning FALSE (no record found)','\TrustCnct\Shibboleth\User\UserHandler',0,$row);
+
         return false;
 
     }
