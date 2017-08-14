@@ -158,9 +158,10 @@ class UserHandler
 
             // Applies only if field is empty in the database
             if (!empty($mappingEmptyDbFieldName)) {
+                $lookupField = $this->config['IDMapping.'][$mappingEmptyDbFieldName];
                 $query->expr()->orWhere(
-                    $query->expr()->isNull($mappingEmptyDbFieldName),
-                    $query->expr()->eq($mappingEmptyDbFieldName, '')
+                    $query->expr()->isNull($lookupField),
+                    $query->expr()->eq($lookupField, '')
                 );
             }
 
@@ -176,7 +177,8 @@ class UserHandler
 
             // Applies only if field is empty in the database
             if (!empty($mappingEmptyDbFieldName)) {
-                $where .= ' AND ('.$mappingEmptyDbFieldName.' IS NULL OR '.$mappingEmptyDbFieldName.'=\'\') ';
+                $lookupField = $this->config['IDMapping.'][$mappingEmptyDbFieldName];
+                $where .= ' AND ('.$lookupField.' IS NULL OR '.$lookupField.'=\'\') ';
             }
 
             //$GLOBALS['TYPO3_DB']->debugOutput = TRUE;
