@@ -209,18 +209,6 @@ class ShibbolethAuthentificationService extends \TYPO3\CMS\Sv\AbstractAuthentica
             return false;
         }
 
-        if ($user[$this->db_user['username_column']] == '') {
-            if($this->writeDevLog)
-                GeneralUtility::devlog(
-                    $this->mode.': Username is empty string. Never do this!',
-                    '\TrustCnct\Shibboleth\ShibbolethAuthentificationService',
-                    3,
-                    $this->shibboleth_extConf[$this->authInfo['loginType'].'_autoImport']
-                );
-            $this->logoffPresentUser();
-            return FALSE;
-        }
-
         if($this->writeDevLog) GeneralUtility::devlog('getUser: offering $user for authentication','\TrustCnct\Shibboleth\ShibbolethAuthentificationService',0,$user);
 
         if (!$isAlreadyThere) {
@@ -279,6 +267,19 @@ class ShibbolethAuthentificationService extends \TYPO3\CMS\Sv\AbstractAuthentica
                 // We now can auto-import; we won't be in authUser, if getUser didn't detect auto-import configuration.
             $user['uid'] = $userhandler->synchronizeUserData($user);
             if($this->writeDevLog) GeneralUtility::devlog('authUser: after insert/update DB $uid=' . $user['uid'] . '; ($user attached).','\TrustCnct\Shibboleth\ShibbolethAuthentificationService',0,$user);
+
+            if ($user[$this->db_user['username_column']] == '') {
+                if($this->writeDevLog)
+                    GeneralUtility::devlog(
+                        $this->mode.': Username is empty string. Never do this!',
+                        '\TrustCnct\Shibboleth\ShibbolethAuthentificationService',
+                        3,
+                        $this->shibboleth_extConf[$this->authInfo['loginType'].'_autoImport']
+                    );
+                $this->logoffPresentUser();
+                return FALSE;
+            }
+
             if ((! $user['disable']) AND ($user['uid']>0)) {
                 if ($this->writeDevLog) GeneralUtility::devLog('authUser: user authenticated','\TrustCnct\Shibboleth\ShibbolethAuthentificationService',-1,$user);
                 return 200;
