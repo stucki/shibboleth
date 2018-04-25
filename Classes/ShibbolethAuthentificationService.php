@@ -122,24 +122,33 @@ class ShibbolethAuthentificationService extends \TYPO3\CMS\Sv\AbstractAuthentica
             $posOfShibInKey = strpos($serverEnvKey,'Shib');
             if ($posOfShibInKey !== FALSE && $posOfShibInKey < $shortestPrefixLength) {
                 $shortestPrefixLength = $posOfShibInKey;
-                $this->envShibPrefix = substr($serverEnvKey, 0, $posOfShibInKey);
-                $this->hasShibbolethSession = TRUE;
-                $separationChar = substr($serverEnvKey, $posOfShibInKey+4,1);
-                $this->shibSessionIdKey = $this->envShibPrefix . 'Shib'.$separationChar.'Session'.$separationChar.'ID';
-                $this->shibApplicationIdKey = $this->envShibPrefix . 'Shib'.$separationChar.'Application'.$separationChar.'ID';
+                $shibKey = substr($serverEnvKey, $posOfShibInKey);
+                switch($shibKey) {
+                    case 'Shib_Application_ID':
+                    case 'Shib_Session_ID':
+                        $shibApplicationIdKey = 'Shib_Application_ID';
+                        $shibSessionIdKey = 'Shib_Session_ID';
+                        break;
+                    case 'Shib-Application-ID':
+                    case 'Shib-Session-ID':
+                        $shibApplicationIdKey = 'Shib-Application-ID';
+                        $shibSessionIdKey = 'Shib-Session-ID';
+                        break;
+                    default:
+                        // Ignore any other keys, e.g. Shib-Identity-Provider
+                }
+
+                if ($shibSessionIdKey) {
+                    $this->envShibPrefix = substr($serverEnvKey, 0, $posOfShibInKey);
+                    $this->shibApplicationIdKey = $this->envShibPrefix . $shibApplicationIdKey;
+                    $this->shibSessionIdKey = $this->envShibPrefix . $shibSessionIdKey;
+                    $this->hasShibbolethSession = TRUE;
+
+                    // Stop the search when a key was found
+                    break;
+                }
             }
         }
-        /*
-        // Another chance to detect Shibboleth session present; just for safety, as code before not well tested at the moment
-        if (!$this->hasShibbolethSession && isset($_SERVER['AUTH_TYPE']) && $_SERVER['AUTH_TYPE'] == 'shibboleth') {
-            if (isset($_SERVER['Shib_Session_ID']) && $_SERVER['Shib_Session_ID'] != '') {
-                $this->hasShibbolethSession = TRUE;
-                $this->envShibPrefix = '';
-                $this->shibSessionIdKey = 'Shib_Session_ID';
-                $this->shibApplicationIdKey = 'Shib_Application_ID';
-            }
-        }
-        */
         
         return $available;
     }
@@ -237,18 +246,6 @@ class ShibbolethAuthentificationService extends \TYPO3\CMS\Sv\AbstractAuthentica
             return false;
         }
 
-        if ($user[$this->db_user['username_column']] == '') {
-            if($this->writeDevLog)
-                GeneralUtility::devlog(
-                    $this->mode.': Username is empty string. Never do this!',
-                    'shibboleth',
-                    3,
-                    $this->shibboleth_extConf[$this->authInfo['loginType'].'_autoImport']
-                );
-            $this->logoffPresentUser();
-            return FALSE;
-        }
-
         if($this->writeDevLog) GeneralUtility::devlog('getUser: offering $user for authentication','shibboleth',0,$user);
 
         if (!$isAlreadyThere) {
@@ -307,6 +304,20 @@ class ShibbolethAuthentificationService extends \TYPO3\CMS\Sv\AbstractAuthentica
                 // We now can auto-import; we won't be in authUser, if getUser didn't detect auto-import configuration.
             $user['uid'] = $userhandler->synchronizeUserData($user);
             if($this->writeDevLog) GeneralUtility::devlog('authUser: after insert/update DB $uid=' . $user['uid'] . '; ($user attached).','shibboleth',0,$user);
+
+            if ($user[$this->db_user['username_column']] == '') {
+                if($this->writeDevLog) {
+                    GeneralUtility::devlog(
+                        $this->mode.': Username is empty string. Never do this!',
+                        'shibboleth',
+                        3,
+                        $this->shibboleth_extConf[$this->authInfo['loginType'].'_autoImport']
+                    );
+                }
+                $this->logoffPresentUser();
+                return false;
+            }
+
             if ((! $user['disable']) AND ($user['uid']>0)) return 200;
             if (defined('TYPO3_MODE') AND (TYPO3_MODE == 'BE') AND ($user['disable'])) {
                 if ($this->writeDevLog) GeneralUtility::devLog('authUser: user created/exists, but is in state "disable"','shibboleth',2,$user);
